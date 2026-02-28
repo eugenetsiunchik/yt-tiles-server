@@ -17,7 +17,8 @@
         top: 12px;
         left: 12px;
         z-index: 1;
-        background: rgba(255,255,255,0.92);
+        background: var(--bar-bg);
+        color: var(--bar-fg);
         padding: 10px 12px;
         border-radius: 10px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.15);
@@ -25,16 +26,85 @@
         max-width: 420px;
       }
       .bar code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .bar a { color: inherit; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .meta { opacity: 0.9; }
+
+      :root {
+        --bar-bg: rgba(255,255,255,0.92);
+        --bar-fg: #111827;
+        --bar-muted: rgba(17, 24, 39, 0.55);
+        color-scheme: light;
+      }
+      :root[data-theme="dark"] {
+        --bar-bg: rgba(15, 27, 45, 0.86);
+        --bar-fg: #e7f0ff;
+        --bar-muted: rgba(229, 231, 235, 0.6);
+        color-scheme: dark;
+      }
+
+      /* Small toggle switch */
+      .switch { display: inline-flex; align-items: center; gap: 8px; user-select: none; }
+      .switch .label { font-weight: 600; }
+      .toggle {
+        appearance: none;
+        width: 42px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid rgba(0,0,0,0.15);
+        position: relative;
+        cursor: pointer;
+        outline: none;
+      }
+      :root[data-theme="dark"] .toggle {
+        background: rgba(255,255,255,0.18);
+        border-color: rgba(255,255,255,0.18);
+      }
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 3px;
+        transform: translateY(-50%);
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        transition: left 160ms ease, background 160ms ease;
+      }
+      :root[data-theme="dark"] .toggle::after {
+        background: #e7f0ff;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+      }
+      .toggle:checked { background: #2563eb; border-color: rgba(37, 99, 235, 0.6); }
+      .toggle:checked::after { left: 21px; }
+
+      /* Darken MapLibre UI controls a bit */
+      :root[data-theme="dark"] .maplibregl-ctrl-group {
+        background: rgba(15, 27, 45, 0.78);
+        border: 1px solid rgba(255,255,255,0.12);
+      }
+      :root[data-theme="dark"] .maplibregl-ctrl-group button {
+        filter: invert(1) hue-rotate(180deg);
+      }
     </style>
   </head>
   <body>
     <div id="map"></div>
     <div class="bar">
-      <div><strong>Belarus vector tiles</strong></div>
-      <div>Style: <code>/styles/style.json</code></div>
-      <div>Tiles: <code>/data/belarus/{z}/{x}/{y}.pbf</code></div>
-      <div>Glyphs: <code>/fonts/{fontstack}/{range}.pbf</code></div>
-      <div>Sprites: <code>/sprites/belarus/sprite</code></div>
+      <div class="row">
+        <div><strong>Belarus vector tiles</strong></div>
+        <label class="switch" title="Toggle light/dark map style">
+          <span class="label">Dark</span>
+          <input id="themeToggle" class="toggle" type="checkbox" aria-label="Toggle dark theme" />
+        </label>
+      </div>
+      <div class="meta">Style: <code id="stylePath"></code></div>
+      <div class="meta">Tiles: <code>/data/belarus/{z}/{x}/{y}.pbf</code></div>
+      <div class="meta">Glyphs: <code>/fonts/{fontstack}/{range}.pbf</code></div>
+      <div class="meta">Sprites: <code>/sprites/belarus/sprite</code></div>
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin="anonymous"></script>
@@ -43,17 +113,41 @@
         const origin = window.location.origin;
         const absolutize = (u) => (typeof u === "string" && u.startsWith("/")) ? origin + u : u;
 
-        const style = await fetch("/styles/style.json").then((r) => r.json());
+        const THEMES = {
+          light: "/styles/style.json",
+          dark: "/styles/style-dark.json"
+        };
 
-        // MapLibre loads tiles in a WebWorker; absolute URLs avoid worker base-URL issues.
-        style.glyphs = absolutize(style.glyphs);
-        if (style.sprite) style.sprite = absolutize(style.sprite);
-        if (style.sources) {
-          for (const src of Object.values(style.sources)) {
-            if (src && Array.isArray(src.tiles)) src.tiles = src.tiles.map(absolutize);
-            if (src && typeof src.url === "string") src.url = absolutize(src.url);
+        const stylePathEl = document.getElementById("stylePath");
+        const themeToggle = document.getElementById("themeToggle");
+
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const stored = window.localStorage.getItem("theme");
+        const initialTheme = (stored === "light" || stored === "dark") ? stored : (prefersDark ? "dark" : "light");
+
+        const loadStyle = async (styleUrl) => {
+          const style = await fetch(styleUrl).then((r) => r.json());
+          // MapLibre loads tiles in a WebWorker; absolute URLs avoid worker base-URL issues.
+          style.glyphs = absolutize(style.glyphs);
+          if (style.sprite) style.sprite = absolutize(style.sprite);
+          if (style.sources) {
+            for (const src of Object.values(style.sources)) {
+              if (src && Array.isArray(src.tiles)) src.tiles = src.tiles.map(absolutize);
+              if (src && typeof src.url === "string") src.url = absolutize(src.url);
+            }
           }
-        }
+          return style;
+        };
+
+        const applyThemeToPage = (theme) => {
+          document.documentElement.dataset.theme = theme;
+          window.localStorage.setItem("theme", theme);
+          if (stylePathEl) stylePathEl.textContent = THEMES[theme];
+          if (themeToggle) themeToggle.checked = (theme === "dark");
+        };
+
+        applyThemeToPage(initialTheme);
+        const style = await loadStyle(THEMES[initialTheme]);
 
         const map = new maplibregl.Map({
           container: "map",
@@ -63,6 +157,19 @@
           hash: true
         });
         map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+        const setTheme = async (theme) => {
+          if (!THEMES[theme]) return;
+          applyThemeToPage(theme);
+          const nextStyle = await loadStyle(THEMES[theme]);
+          map.setStyle(nextStyle);
+        };
+
+        if (themeToggle) {
+          themeToggle.addEventListener("change", () => {
+            setTheme(themeToggle.checked ? "dark" : "light").catch((err) => console.error("Failed to set theme:", err));
+          });
+        }
 
         map.on("error", (e) => {
           if (e && e.error) console.warn("MapLibre error:", e.error);

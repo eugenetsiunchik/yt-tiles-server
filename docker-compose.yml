@@ -1,0 +1,51 @@
+services:
+  tileserver:
+    # "light" saves RAM by disabling raster rendering endpoints (we only need vector .pbf + fonts/sprites).
+    image: maptiler/tileserver-gl-light:latest
+    container_name: tileserver
+    restart: unless-stopped
+    environment:
+      # Keep Node.js heap bounded for 2GB VPS.
+      - NODE_OPTIONS=--max-old-space-size=768
+      # Production-safe: mitigate Host header poisoning; keep "*" until you have a domain.
+      - TILESERVER_GL_ALLOWED_HOSTS=*
+    command: ["-c", "/data/config/config.json", "--bind", "0.0.0.0", "--port", "8080"]
+    expose:
+      - "8080"
+    volumes:
+      - ./tileserver/config:/data/config:ro
+      - ./tileserver/styles:/data/styles:ro
+      - ./data/mbtiles:/data/mbtiles:ro
+      - ./assets/fonts:/data/fonts:ro
+      - ./assets/sprites:/data/sprites:ro
+      - ./files:/data/files:ro
+    # Compose (non-Swarm) memory limit; prevents OOM-killing the whole VPS.
+    mem_limit: 1200m
+    cpus: "1.50"
+    networks:
+      - internal
+
+  nginx:
+    image: nginxinc/nginx-unprivileged:stable-alpine
+    container_name: nginx
+    restart: unless-stopped
+    depends_on:
+      - tileserver
+    ports:
+      # Nginx unprivileged listens on 8080 in-container.
+      - "80:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web:/usr/share/nginx/html:ro
+      - ./tileserver/styles:/srv/styles:ro
+      - ./assets/fonts:/srv/fonts:ro
+      - ./assets/sprites:/srv/sprites:ro
+    tmpfs:
+      - /tmp/nginx-cache
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+

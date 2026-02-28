@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Belarus Vector Tiles (MapLibre)</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+      crossorigin="anonymous"
+    />
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #map { position: absolute; inset: 0; }
+      .bar {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 1;
+        background: rgba(255,255,255,0.92);
+        padding: 10px 12px;
+        border-radius: 10px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        max-width: 420px;
+      }
+      .bar code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div class="bar">
+      <div><strong>Belarus vector tiles</strong></div>
+      <div>Style: <code>/styles/style.json</code></div>
+      <div>Tiles: <code>/data/belarus/{z}/{x}/{y}.pbf</code></div>
+      <div>Glyphs: <code>/fonts/{fontstack}/{range}.pbf</code></div>
+      <div>Sprites: <code>/sprites/belarus/sprite</code></div>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin="anonymous"></script>
+    <script>
+      (async () => {
+        const origin = window.location.origin;
+        const absolutize = (u) => (typeof u === "string" && u.startsWith("/")) ? origin + u : u;
+
+        const style = await fetch("/styles/style.json").then((r) => r.json());
+
+        // MapLibre loads tiles in a WebWorker; absolute URLs avoid worker base-URL issues.
+        style.glyphs = absolutize(style.glyphs);
+        if (style.sprite) style.sprite = absolutize(style.sprite);
+        if (style.sources) {
+          for (const src of Object.values(style.sources)) {
+            if (src && Array.isArray(src.tiles)) src.tiles = src.tiles.map(absolutize);
+            if (src && typeof src.url === "string") src.url = absolutize(src.url);
+          }
+        }
+
+        const map = new maplibregl.Map({
+          container: "map",
+          style,
+          center: [27.56, 53.90], // Minsk
+          zoom: 9,
+          hash: true
+        });
+        map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+        map.on("error", (e) => {
+          if (e && e.error) console.warn("MapLibre error:", e.error);
+        });
+      })().catch((err) => console.error("Failed to init map:", err));
+    </script>
+  </body>
+</html>

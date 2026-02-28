@@ -1,0 +1,10 @@
+data/mbtiles/*.mbtiles
+data/mbtiles/*.mbtiles.*
+assets/fonts/
+assets/sprites/
+nginx-cache/
+sources/
+*.mbtiles
+*.mbtiles.*
+*.mbtiles.new
+*tsv.gz

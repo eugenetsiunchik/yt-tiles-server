@@ -205,15 +205,7 @@ Rule of thumb for a 40 GB disk:
 
 ### 8) AWS/S3 setup (for automated updates)
 
-#### 8.1 Can we serve MBTiles “directly from S3” (no downloads on the server)?
-
-Not with this setup. TileServer reads MBTiles via random-access file I/O (SQLite), while S3 is object storage (not a POSIX filesystem). In practice you want one of these patterns:
-
-- **Server pulls from S3 to local disk** (what `fetch-mbtiles-s3.sh` does). Best balance of simplicity + performance.
-- **Network filesystem** (EFS/NFS) mounted to the server (still “a file” from TileServer’s perspective).
-- **Different architecture**: pre-generate a tile pyramid (`{z}/{x}/{y}.pbf`) and serve it from S3/CloudFront (no TileServer/MBTiles), which is a separate pipeline and has different trade-offs.
-
-#### 8.2 Create bucket (recommended settings)
+#### 8.1 Create bucket (recommended settings)
 
 - Create an S3 bucket (private)
 - Enable **Bucket Versioning**
@@ -239,7 +231,7 @@ Recommended `latest.json` (values are FULL `s3://...` URIs):
 }
 ```
 
-#### 8.3 IAM: minimal policies
+#### 8.2 IAM: minimal policies
 
 **VPS deploy user/role (read-only):**
 - `s3:GetObject` on `tilesets/*` and `manifests/latest.json`
@@ -250,7 +242,7 @@ Recommended `latest.json` (values are FULL `s3://...` URIs):
 - `s3:AbortMultipartUpload`, `s3:ListBucketMultipartUploads`, `s3:ListMultipartUploadParts`
 - `s3:ListBucket` on the bucket
 
-#### 8.4 Install AWS CLI (so `aws ...` commands work)
+#### 8.3 Install AWS CLI (so `aws ...` commands work)
 
 - **Ubuntu (VPS):**
 
@@ -267,7 +259,7 @@ brew install awscli jq
 aws --version
 ```
 
-#### 8.5 Configure AWS credentials (so S3 reads work)
+#### 8.4 Configure AWS credentials (so S3 reads work)
 
 Option A (simple IAM user keys):
 
@@ -290,7 +282,7 @@ aws sts get-caller-identity
 aws s3 ls "s3://<bucket>/"
 ```
 
-#### 8.6 Recommended workflow: upstream → S3 → servers pull
+#### 8.5 Recommended workflow: upstream → S3 → servers pull
 
 If your MBTiles come from an open source source (or a build pipeline), you can keep servers simple:
 

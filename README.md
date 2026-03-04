@@ -243,6 +243,20 @@ cd yt-tiles-server
 MAXZOOM=14 ./scripts/fetch-mbtiles-open.sh belarus belarus
 ```
 
+- If you hit `java.lang.OutOfMemoryError: Java heap space`, rerun with a larger heap (and/or reduce Docker Desktop memory):
+
+```bash
+cd yt-tiles-server
+JAVA_XMX=8g MAXZOOM=14 ./scripts/fetch-mbtiles-open.sh belarus belarus
+```
+
+- The script defaults to `--storage=mmap` (stores the node location cache on disk instead of heap). If you have plenty of RAM, you can speed it up with:
+
+```bash
+cd yt-tiles-server
+STORAGE=ram JAVA_XMX=16g MAXZOOM=14 ./scripts/fetch-mbtiles-open.sh belarus belarus
+```
+
 - The second argument (`area`) is passed through to Planetiler’s `--area=...`.
 - If you need a different region name/format, check the upstream docs: [openmaptiles/planetiler-openmaptiles](https://github.com/openmaptiles/planetiler-openmaptiles).
 

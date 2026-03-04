@@ -21,7 +21,9 @@ services:
       - ./files:/data/files:ro
     # Compose (non-Swarm) memory limit; prevents OOM-killing the whole VPS.
     mem_limit: 1200m
-    cpus: "1.50"
+    # Must be <= available CPU cores (1-core VPS would fail if > 1.0).
+    # Override if needed: `TILESERVER_CPUS=1.5 docker compose up -d`
+    cpus: "${TILESERVER_CPUS:-1.0}"
     networks:
       - internal
 

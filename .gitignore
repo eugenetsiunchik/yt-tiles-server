@@ -8,3 +8,4 @@ sources/
 *.mbtiles.*
 *.mbtiles.new
 *tsv.gz
+.DS_Store

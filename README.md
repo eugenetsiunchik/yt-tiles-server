@@ -29,11 +29,22 @@ git config --global user.email "you@example.com"
 
 #### 1.3 Create and register an SSH key
 
+For Git hosting providers (GitHub/GitLab/etc) an `ed25519` key is recommended:
+
 ```bash
 ssh-keygen -t ed25519 -C "you@example.com"
 eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519
-pbcopy < ~/.ssh/id_ed25519.pub || cat ~/.ssh/id_ed25519.pub
+
+# Copy public key to clipboard (pick one):
+# - macOS:
+pbcopy < ~/.ssh/id_ed25519.pub
+# - Linux (X11):
+# xclip -selection clipboard < ~/.ssh/id_ed25519.pub
+# - Linux (Wayland):
+# wl-copy < ~/.ssh/id_ed25519.pub
+# - Anywhere (just print it and copy manually):
+# cat ~/.ssh/id_ed25519.pub
 ```
 
 - Add the copied public key to your Git hosting provider (GitHub/GitLab/etc).
@@ -41,6 +52,25 @@ pbcopy < ~/.ssh/id_ed25519.pub || cat ~/.ssh/id_ed25519.pub
 
 ```bash
 ssh -T git@github.com  # replace github.com with your Git host
+```
+
+If you need an `ssh-rsa` key (some VPS panels reject `ssh-ed25519` and only accept public keys that start with `ssh-rsa ...`):
+
+```bash
+ssh-keygen -t rsa -b 4096 -o -a 64 -f ~/.ssh/id_rsa_yt_tiles -C "root@176.223.129.1"
+cat ~/.ssh/id_rsa_yt_tiles.pub
+```
+
+Connect using that key:
+
+```bash
+ssh -i ~/.ssh/id_rsa_yt_tiles -o IdentitiesOnly=yes root@176.223.129.1
+```
+
+Or use this repo’s helper script (opens iTerm2 and runs SSH):
+
+```bash
+./ssh-terminal2.sh
 ```
 
 ### 2) Clone the project
@@ -105,6 +135,7 @@ sudo usermod -aG docker "$USER"
 newgrp docker
 
 # Firewall (public HTTP for now)
+sudo apt-get install -y ufw
 sudo ufw allow 80/tcp
 sudo ufw --force enable
 ```

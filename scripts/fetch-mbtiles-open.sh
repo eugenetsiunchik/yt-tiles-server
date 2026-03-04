@@ -32,11 +32,12 @@ PLANETILER_IMAGE="${PLANETILER_IMAGE:-openmaptiles/planetiler-openmaptiles:lates
 
 mkdir -p "${DEST_DIR}"
 
+BUILD_HOST="${DEST_DIR}/${DATASET}.build.mbtiles"
+BUILD_IN_CONTAINER="/data/data/mbtiles/${DATASET}.build.mbtiles"
 OUT_HOST="${DEST_DIR}/${DATASET}.mbtiles.new"
-OUT_IN_CONTAINER="/data/data/mbtiles/${DATASET}.mbtiles.new"
 
 echo "==> Building MBTiles (area='${AREA}', maxzoom='${MAXZOOM}')"
-echo "==> Output: ${OUT_HOST}"
+echo "==> Output: ${BUILD_HOST}"
 DOCKER_RUN_ARGS=(--rm)
 if [[ -t 0 && -t 1 ]]; then
   DOCKER_RUN_ARGS+=(-it)
@@ -49,7 +50,10 @@ docker run "${DOCKER_RUN_ARGS[@]}" \
   --download \
   --area="${AREA}" \
   --maxzoom="${MAXZOOM}" \
-  --output="${OUT_IN_CONTAINER}"
+  --output="${BUILD_IN_CONTAINER}"
+
+echo "==> Staging ${OUT_HOST}"
+mv -f "${BUILD_HOST}" "${OUT_HOST}"
 
 echo "==> Installing ${DATASET}.mbtiles"
 "${ROOT_DIR}/scripts/update-mbtiles.sh" "${DATASET}" "${OUT_HOST}"

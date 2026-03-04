@@ -93,13 +93,12 @@ chmod +x scripts/*.sh
 
 # Get initial MBTiles (choose ONE option):
 #
-# Option A: download from an HTTP(S) URL (recommended for local dev)
+# Option A: build from open data (OSM) using an open-source generator (recommended if you don't already host MBTiles)
+# ./scripts/fetch-mbtiles-open.sh belarus belarus
+#
+# Option B: download from an HTTP(S) URL (recommended if you already have a published .mbtiles)
 # ./scripts/fetch-mbtiles.sh belarus "https://example.com/belarus.mbtiles"
 # ./scripts/fetch-mbtiles.sh grodno  "https://example.com/grodno.mbtiles"
-#
-# Option B: fetch from S3 (requires AWS CLI configured; see section 8)
-# ./scripts/fetch-mbtiles-s3.sh belarus "s3://<bucket>/tilesets/belarus/2026-02-28/belarus.mbtiles"
-# ./scripts/fetch-mbtiles-s3.sh grodno  --manifest "s3://<bucket>/manifests/latest.json"
 #
 # Option C: copy files manually into data/mbtiles/
 #   data/mbtiles/belarus.mbtiles
@@ -167,9 +166,8 @@ chmod +x scripts/*.sh
 #   data/mbtiles/belarus.mbtiles
 #   data/mbtiles/<city>.mbtiles (optional)
 #
-# Option B: fetch from S3 (requires AWS CLI configured; see section 8)
-# ./scripts/fetch-mbtiles-s3.sh belarus --manifest "s3://<bucket>/manifests/latest.json"
-# ./scripts/fetch-mbtiles-s3.sh grodno  --manifest "s3://<bucket>/manifests/latest.json"
+# Option B: build from open data (OSM) using an open-source generator
+# ./scripts/fetch-mbtiles-open.sh belarus belarus
 #
 # Option C: download from HTTP(S)
 # ./scripts/fetch-mbtiles.sh belarus "https://example.com/belarus.mbtiles"
@@ -234,122 +232,23 @@ docker compose kill -s HUP tileserver
 Rule of thumb for a 40 GB disk:
 - MBTiles (say 10 GB) + cache (4–8 GB) + images (0.5 GB) + OS/logs/headroom ⇒ comfortable.
 
-### 8) AWS/S3 setup (for automated updates)
+### 8) Build MBTiles from open data (OSM) with Planetiler/OpenMapTiles
 
-#### 8.1 Create bucket (recommended settings)
+This repo includes `scripts/fetch-mbtiles-open.sh`, which uses the open-source Planetiler OpenMapTiles Docker image to **download OSM data and generate** an OpenMapTiles-compatible `.mbtiles`.
 
-- Create an S3 bucket (private)
-- Enable **Bucket Versioning**
-- Keep Block Public Access enabled
-
-Suggested object layout:
-
-```
-s3://<bucket>/tilesets/belarus/2026-02-28/belarus.mbtiles
-s3://<bucket>/tilesets/grodno/2026-02-28/grodno.mbtiles
-s3://<bucket>/tilesets/minsk/2026-02-28/minsk.mbtiles
-...
-s3://<bucket>/manifests/latest.json
-```
-
-Recommended `latest.json` (values are FULL `s3://...` URIs):
-
-```json
-{
-  "belarus": "s3://<bucket>/tilesets/belarus/2026-02-28/belarus.mbtiles",
-  "grodno": "s3://<bucket>/tilesets/grodno/2026-02-28/grodno.mbtiles",
-  "minsk": "s3://<bucket>/tilesets/minsk/2026-02-28/minsk.mbtiles"
-}
-```
-
-#### 8.2 IAM: minimal policies
-
-**VPS deploy user/role (read-only):**
-- `s3:GetObject` on `tilesets/*` and `manifests/latest.json`
-- `s3:ListBucket` on the bucket
-
-**Build job user/role (write):**
-- `s3:PutObject` on `tilesets/*` and `manifests/latest.json`
-- `s3:AbortMultipartUpload`, `s3:ListBucketMultipartUploads`, `s3:ListMultipartUploadParts`
-- `s3:ListBucket` on the bucket
-
-#### 8.3 Install AWS CLI (so `aws ...` commands work)
-
-- **Ubuntu (VPS):**
-
-```bash
-sudo apt-get update
-sudo apt-get install -y awscli jq
-aws --version
-```
-
-- **macOS (local dev):**
-
-```bash
-brew install awscli jq
-aws --version
-```
-
-#### 8.4 Configure AWS credentials (so S3 reads work)
-
-Option A (simple IAM user keys):
-
-```bash
-aws configure
-# AWS Access Key ID [None]: ...
-# AWS Secret Access Key [None]: ...
-# Default region name [None]: eu-central-1
-# Default output format [None]: json
-```
-
-This writes `~/.aws/credentials` and `~/.aws/config`.
-
-Option B (recommended on AWS EC2): use an **instance role** and skip access keys.
-
-Quick check (optional):
-
-```bash
-aws sts get-caller-identity
-aws s3 ls "s3://<bucket>/"
-```
-
-#### 8.5 Recommended workflow: upstream → S3 → servers pull
-
-If your MBTiles come from an open source source (or a build pipeline), you can keep servers simple:
-
-- **Build machine / CI**: download/build MBTiles, upload to S3, update `manifests/latest.json`
-- **Servers (VPS)**: periodically pull from S3 using `fetch-mbtiles-s3.sh` (cron)
-
-Example upload (run on your build machine/CI):
-
-```bash
-aws s3 cp ./belarus.mbtiles "s3://<bucket>/tilesets/belarus/$(date +%F)/belarus.mbtiles"
-aws s3 cp ./grodno.mbtiles  "s3://<bucket>/tilesets/grodno/$(date +%F)/grodno.mbtiles"
-```
-
-Then update the manifest (example):
-
-```bash
-aws s3 cp ./latest.json "s3://<bucket>/manifests/latest.json" --content-type "application/json"
-```
-
-### 9) Download MBTiles from S3 and update the server
-
-Direct S3 URI (one dataset):
+Example (Belarus, \(z0–z14\)):
 
 ```bash
 cd yt-tiles-server
-./scripts/fetch-mbtiles-s3.sh grodno "s3://<bucket>/tilesets/grodno/2026-02-28/grodno.mbtiles"
+MAXZOOM=14 ./scripts/fetch-mbtiles-open.sh belarus belarus
 ```
 
-Via manifest (one dataset):
+- The second argument (`area`) is passed through to Planetiler’s `--area=...`.
+- If you need a different region name/format, check the upstream docs: [openmaptiles/planetiler-openmaptiles](https://github.com/openmaptiles/planetiler-openmaptiles).
 
-```bash
-cd yt-tiles-server
-./scripts/fetch-mbtiles-s3.sh grodno --manifest "s3://<bucket>/manifests/latest.json"
-```
+Production tip: building MBTiles can be CPU/disk heavy. A common approach is to build on a separate machine/CI and then have servers update via `./scripts/fetch-mbtiles.sh <dataset> https://.../<dataset>.mbtiles` or `scp` + `./scripts/update-mbtiles.sh`.
 
-### 10) Cron jobs (different frequencies per area)
+### 9) Cron jobs (different frequencies per area)
 
 Install cron (usually already installed on Ubuntu):
 
@@ -371,13 +270,13 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Belarus (weekly, Sunday 03:10 UTC)
-10 3 * * 0 cd /root/yt-tiles-server && flock -n /tmp/yt-belarus.lock ./scripts/fetch-mbtiles-s3.sh belarus --manifest "s3://<bucket>/manifests/latest.json" >>/var/log/yt-belarus.log 2>&1
+10 3 * * 0 cd /root/yt-tiles-server && flock -n /tmp/yt-belarus.lock MAXZOOM=14 ./scripts/fetch-mbtiles-open.sh belarus belarus >>/var/log/yt-belarus.log 2>&1
 
 # Grodno (every 6 hours)
-0 */6 * * * cd /root/yt-tiles-server && flock -n /tmp/yt-grodno.lock ./scripts/fetch-mbtiles-s3.sh grodno --manifest "s3://<bucket>/manifests/latest.json" >>/var/log/yt-grodno.log 2>&1
+0 */6 * * * cd /root/yt-tiles-server && flock -n /tmp/yt-grodno.lock ./scripts/fetch-mbtiles.sh grodno "https://example.com/grodno.mbtiles" >>/var/log/yt-grodno.log 2>&1
 
 # Minsk (daily 02:20 UTC)
-20 2 * * * cd /root/yt-tiles-server && flock -n /tmp/yt-minsk.lock ./scripts/fetch-mbtiles-s3.sh minsk --manifest "s3://<bucket>/manifests/latest.json" >>/var/log/yt-minsk.log 2>&1
+20 2 * * * cd /root/yt-tiles-server && flock -n /tmp/yt-minsk.lock ./scripts/fetch-mbtiles.sh minsk "https://example.com/minsk.mbtiles" >>/var/log/yt-minsk.log 2>&1
 ```
 
 Tip: if you run the repo under a different user/path, change `cd /root/yt-tiles-server`.

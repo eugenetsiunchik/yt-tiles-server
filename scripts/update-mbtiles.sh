@@ -36,8 +36,13 @@ tmp="${DEST_DIR}/${DATASET}.mbtiles.new"
 dest="${DEST_DIR}/${DATASET}.mbtiles"
 bak="${DEST_DIR}/${DATASET}.mbtiles.bak"
 
-echo "==> Copying to ${tmp}"
-cp -f "${NEW_FILE}" "${tmp}"
+if [[ "$(cd "$(dirname "${NEW_FILE}")" && pwd)" == "${DEST_DIR}" && "$(basename "${NEW_FILE}")" == "${DATASET}.mbtiles.new" ]]; then
+  echo "==> Using pre-staged ${NEW_FILE}"
+  tmp="${NEW_FILE}"
+else
+  echo "==> Copying to ${tmp}"
+  cp -f "${NEW_FILE}" "${tmp}"
+fi
 sync
 
 echo "==> Rotating files"
